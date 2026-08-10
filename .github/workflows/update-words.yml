@@ -1,0 +1,326 @@
+name: Daily Rajasthan Words Update
+
+on:
+  schedule:
+    # Every day at 12:00 AM IST
+    # GitHub cron uses UTC, so 18:30 UTC = 12:00 AM IST
+    - cron: "30 18 * * *"
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-words:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate daily Rajasthan words
+        shell: python
+        run: |
+          import json
+          import random
+          from datetime import datetime, timezone
+
+          # ------------------------------------------
+          # Rajasthan master word bank
+          # ------------------------------------------
+
+          WORDS = [
+              # Geography
+              "Aravalli Range",
+              "Thar Desert",
+              "Luni River",
+              "Chambal River",
+              "Banas River",
+              "Mahi River",
+              "Ghaggar River",
+              "Sambhar Lake",
+              "Pichola Lake",
+              "Fateh Sagar Lake",
+              "Ana Sagar Lake",
+              "Rajsamand Lake",
+              "Nakki Lake",
+              "Jaisamand Lake",
+              "Pushkar Lake",
+              "Bisalpur Dam",
+              "Indira Gandhi Canal",
+              "Mount Abu",
+              "Guru Shikhar",
+              "Kumbhalgarh",
+              "Shekhawati",
+              "Mewar",
+              "Marwar",
+              "Hadoti",
+              "Dhundhar",
+              "Vagad",
+              "Mewat",
+
+              # Wildlife
+              "Ranthambore National Park",
+              "Sariska Tiger Reserve",
+              "Keoladeo National Park",
+              "Desert National Park",
+              "Kumbhalgarh Wildlife Sanctuary",
+              "Tal Chhapar Sanctuary",
+              "Mount Abu Wildlife Sanctuary",
+              "National Chambal Sanctuary",
+              "Mukundra Hills Tiger Reserve",
+              "Ramgarh Vishdhari Tiger Reserve",
+              "Great Indian Bustard",
+              "Blackbuck",
+              "Chinkara",
+              "Indian Wolf",
+              "Desert Fox",
+
+              # Forts
+              "Amer Fort",
+              "Chittorgarh Fort",
+              "Kumbhalgarh Fort",
+              "Mehrangarh Fort",
+              "Jaisalmer Fort",
+              "Jaigarh Fort",
+              "Nahargarh Fort",
+              "Junagarh Fort",
+              "Taragarh Fort",
+              "Ranthambore Fort",
+              "Gagron Fort",
+              "Bundi Fort",
+              "Bhatner Fort",
+              "Lohagarh Fort",
+              "Siwana Fort",
+              "Achalgarh Fort",
+
+              # Palaces & Architecture
+              "Hawa Mahal",
+              "City Palace Jaipur",
+              "City Palace Udaipur",
+              "Umaid Bhawan Palace",
+              "Jal Mahal",
+              "Lake Palace Udaipur",
+              "Monsoon Palace",
+              "Patwon Ki Haveli",
+              "Nathmal Ki Haveli",
+              "Salim Singh Ki Haveli",
+              "Chand Baori",
+              "Panna Meena Ka Kund",
+              "Vijay Stambha",
+              "Kirti Stambha",
+              "Ranakpur Jain Temple",
+              "Dilwara Temples",
+              "Brahma Temple Pushkar",
+              "Karni Mata Temple",
+              "Eklingji Temple",
+              "Govind Dev Ji Temple",
+              "Mehandipur Balaji",
+              "Khatu Shyam Temple",
+              "Salasar Balaji",
+
+              # History
+              "Maharana Pratap",
+              "Prithviraj Chauhan",
+              "Rana Sanga",
+              "Rana Kumbha",
+              "Rawal Ratan Singh",
+              "Rani Padmini",
+              "Mirabai",
+              "Panna Dhai",
+              "Rao Jodha",
+              "Sawai Jai Singh",
+              "Durgadas Rathore",
+              "Man Singh I",
+              "Rana Hammir",
+              "Rao Bika",
+              "Rao Maldeo",
+              "Hammir Dev Chauhan",
+              "Mewar Dynasty",
+              "Marwar Dynasty",
+              "Chauhan Dynasty",
+              "Rathore Dynasty",
+              "Kachhwaha Dynasty",
+              "Sisodia Dynasty",
+              "Battle of Haldighati",
+              "Battle of Khanwa",
+              "Jauhar",
+              "Saka",
+              "Rajputana",
+
+              # Art & Crafts
+              "Bani Thani",
+              "Kishangarh Painting",
+              "Mewar Painting",
+              "Marwar Painting",
+              "Phad Painting",
+              "Pichwai Art",
+              "Blue Pottery",
+              "Bagru Print",
+              "Sanganeri Print",
+              "Block Printing",
+              "Bandhani",
+              "Leheriya",
+              "Gota Patti",
+              "Thewa Art",
+              "Mojari",
+              "Kathputli",
+              "Kundan Jewellery",
+              "Meenakari",
+              "Lac Bangles",
+              "Rajasthan Handicrafts",
+
+              # Dance & Music
+              "Ghoomar",
+              "Kalbelia",
+              "Chari Dance",
+              "Kachhi Ghodi",
+              "Gavari",
+              "Terah Taali",
+              "Bhavai Dance",
+              "Kathputli Dance",
+              "Ravanahatha",
+              "Kamaicha",
+              "Algoza",
+              "Morchang",
+              "Sarangi Rajasthan",
+              "Maand Music",
+
+              # Festivals & Fairs
+              "Pushkar Camel Fair",
+              "Desert Festival Jaisalmer",
+              "Teej Festival",
+              "Gangaur Festival",
+              "Marwar Festival",
+              "Karni Mata Fair",
+              "Mewar Festival",
+              "Brij Holi",
+              "Kumbhalgarh Festival",
+              "Baneshwar Fair",
+              "Ramdevra Fair",
+              "Kolayat Fair",
+
+              # Food
+              "Dal Baati Churma",
+              "Gatte Ki Sabzi",
+              "Ker Sangri",
+              "Laal Maas",
+              "Bajre Ki Roti",
+              "Pyaaz Kachori",
+              "Mirchi Bada",
+              "Mawa Kachori",
+              "Ghevar",
+              "Rabri",
+              "Malpua",
+              "Rajasthani Thali",
+
+              # Cities & Places
+              "Jaipur",
+              "Jodhpur",
+              "Udaipur",
+              "Jaisalmer",
+              "Ajmer",
+              "Bikaner",
+              "Kota Rajasthan",
+              "Bundi",
+              "Chittorgarh",
+              "Alwar",
+              "Bharatpur",
+              "Pushkar",
+              "Barmer",
+              "Sawai Madhopur",
+              "Sikar",
+              "Jhunjhunu",
+              "Bhilwara",
+              "Pali",
+              "Nagaur",
+              "Dausa",
+              "Dungarpur",
+              "Banswara",
+              "Jhalawar",
+              "Rajsamand",
+              "Pratapgarh Rajasthan",
+              "Tonk Rajasthan",
+              "Hanumangarh",
+              "Sri Ganganagar",
+              "Churu",
+              "Jalore",
+              "Sirohi",
+              "Karauli",
+              "Dholpur",
+
+              # Culture & Traditions
+              "Rajasthani Culture",
+              "Rajasthani Folk Art",
+              "Rajasthani Folk Music",
+              "Rajasthani Traditional Dress",
+              "Rajasthani Turban",
+              "Pagri Rajasthan",
+              "Ghoonghat Rajasthan",
+              "Rajasthani Jewellery",
+              "Rajasthani Architecture",
+              "Rajasthani Language",
+              "Marwari Language",
+              "Mewari Language",
+              "Dhundhari Language",
+              "Shekhawati Culture",
+              "Marwar Culture",
+              "Mewar Culture"
+          ]
+
+          # ------------------------------------------
+          # Remove duplicate entries
+          # ------------------------------------------
+
+          WORDS = list(dict.fromkeys(WORDS))
+
+          # ------------------------------------------
+          # Use today's date as seed
+          # This gives a different selection each day
+          # ------------------------------------------
+
+          today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+          random.seed(today)
+
+          shuffled = WORDS.copy()
+          random.shuffle(shuffled)
+
+          # Exactly 30 words
+          daily_words = shuffled[:30]
+
+          # ------------------------------------------
+          # Write words.json
+          # ------------------------------------------
+
+          with open("words.json", "w", encoding="utf-8") as f:
+              json.dump(
+                  daily_words,
+                  f,
+                  ensure_ascii=False,
+                  indent=2
+              )
+              f.write("\n")
+
+          print("Date:", today)
+          print("Total master words:", len(WORDS))
+          print("Daily words:", len(daily_words))
+
+          print("\nToday's Rajasthan words:")
+          for i, word in enumerate(daily_words, 1):
+              print(f"{i}. {word}")
+
+      - name: Commit updated words.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add words.json
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update daily Rajasthan words"
+            git push
+          fi
