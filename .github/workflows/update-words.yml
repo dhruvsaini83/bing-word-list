@@ -287,8 +287,8 @@ jobs:
           shuffled = WORDS.copy()
           random.shuffle(shuffled)
 
-          # Exactly 30 words
-          daily_words = shuffled[:30]
+          # Exactly 40 words
+          daily_words = shuffled[:40]
 
           # ------------------------------------------
           # Write words.json
