@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         Bing Trending Auto & Next Word Search (No Repeats + Hybrid)
 // @namespace    bing-auto-search
-// @version      6.1
+// @version      6.2
 // @description  Bing search assistant that remembers searched words so they NEVER repeat, supports manual Next Word button & automated loop with safe delays.
 // @author       dhruvsaini83
 // @match        https://www.bing.com/*
+// @match        https://cn.bing.com/*
+// @match        https://bing.com/*
 // @grant        none
 // @run-at       document-end
 // ==/UserScript==
@@ -173,25 +175,46 @@
     }
 
     function executeSearch(query) {
-        if (isNavigating || !query) return;
+        if (!query) return;
+
+        // Prevent rapid duplicate clicks, auto reset after 2.5s
+        if (isNavigating) return;
         isNavigating = true;
+        setTimeout(() => { isNavigating = false; }, 2500);
 
         markWordAsSearched(query);
         fillSearchBox(query);
-
-        // Try submitting form first; fallback to direct navigation
-        const form = document.querySelector('#sb_form');
-        if (form && typeof form.submit === 'function') {
-            try {
-                form.submit();
-                return;
-            } catch (e) {
-                // fall through
-            }
-        }
+        updateUIStatus();
 
         const targetUrl = 'https://www.bing.com/search?q=' + encodeURIComponent(query);
-        window.location.href = targetUrl;
+
+        // Step 1: Attempt to trigger search via submit button click / requestSubmit
+        let submitted = false;
+        try {
+            const goBtn = document.querySelector('#sb_form_go, #search_icon, .b_searchboxSubmit, input[type="submit"], button[type="submit"]');
+            if (goBtn) {
+                goBtn.click();
+                submitted = true;
+            } else {
+                const form = document.querySelector('#sb_form');
+                if (form && typeof form.requestSubmit === 'function') {
+                    form.requestSubmit();
+                    submitted = true;
+                }
+            }
+        } catch (e) {
+            console.warn('[Bing Assistant] Submit trigger error:', e);
+        }
+
+        // Step 2: Absolute guaranteed navigation fallback
+        // Bing search result pages frequently ignore synthetic clicks and form.submit().
+        // If the URL has not navigated to the new query after a short delay, force window.location.href.
+        setTimeout(() => {
+            const currentQ = normalizeText(getURLQuery());
+            if (currentQ !== normalizeText(query)) {
+                window.location.href = targetUrl;
+            }
+        }, submitted ? 500 : 50);
     }
 
     // ==========================================
@@ -239,13 +262,14 @@
         const statusEl = document.getElementById('bing-hud-countdown');
         if (statusEl) statusEl.textContent = `⏳ Next in ${secondsLeft}s...`;
 
-        clearInterval(countdownTimer);
+        if (countdownTimer) clearInterval(countdownTimer);
         countdownTimer = setInterval(() => {
             secondsLeft -= 1;
             if (secondsLeft > 0) {
                 if (statusEl) statusEl.textContent = `⏳ Next in ${secondsLeft}s...`;
             } else {
                 clearInterval(countdownTimer);
+                countdownTimer = null;
                 if (statusEl) statusEl.textContent = `🚀 Searching...`;
                 advanceToNextWord(true);
             }
@@ -254,7 +278,10 @@
 
     function stopAutoRun() {
         setAutoRunning(false);
-        clearInterval(countdownTimer);
+        if (countdownTimer) {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+        }
         updateUIButtons();
         const statusEl = document.getElementById('bing-hud-countdown');
         if (statusEl) statusEl.textContent = '⏸️ Paused';
@@ -565,6 +592,39 @@
                 stopAutoRun();
             }
         }
+
+        // SPA & dynamic URL change watcher (handles pushState / popstate without full page reload)
+        let lastObservedUrl = window.location.href;
+        let lastObservedQuery = currentQuery;
+
+        function checkUrlOrQueryChange() {
+            const curUrl = window.location.href;
+            const curQ = getURLQuery();
+
+            if (curUrl !== lastObservedUrl || normalizeText(curQ) !== normalizeText(lastObservedQuery)) {
+                lastObservedUrl = curUrl;
+                lastObservedQuery = curQ;
+
+                if (curQ) {
+                    markWordAsSearched(curQ);
+                }
+
+                updateUIStatus();
+
+                if (isAutoRunning() && !countdownTimer) {
+                    const next = getNextUnsearchedItem();
+                    if (next) {
+                        startAutoRun();
+                    } else {
+                        stopAutoRun();
+                        alert('🎉 Sabhi 40 trending words search ho chuke hain! Aaj ka quota pura ho gaya.');
+                    }
+                }
+            }
+        }
+
+        setInterval(checkUrlOrQueryChange, 500);
+        window.addEventListener('popstate', checkUrlOrQueryChange);
     }
 
     if (document.readyState === 'loading') {
