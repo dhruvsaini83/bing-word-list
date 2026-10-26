@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Bing Trending Auto & Next Word Search (Hybrid)
+// @name         Bing Trending Auto & Next Word Search (No Repeats + Hybrid)
 // @namespace    bing-auto-search
-// @version      6.0
-// @description  Hybrid Bing search assistant: manual Next Word button + fully automated search with safe random delay & floating UI.
+// @version      6.1
+// @description  Bing search assistant that remembers searched words so they NEVER repeat, supports manual Next Word button & automated loop with safe delays.
 // @author       dhruvsaini83
 // @match        https://www.bing.com/*
 // @grant        none
@@ -16,7 +16,8 @@
     // CONFIGURATION & STORAGE KEYS
     // ==========================================
     const WORDS_URL = 'https://raw.githubusercontent.com/dhruvsaini83/bing-word-list/main/words.json';
-    const STORAGE_KEY_INDEX = 'bing_hybrid_word_index_v6';
+    const STORAGE_KEY_SEARCHED = 'bing_hybrid_searched_list_v6';
+    const STORAGE_KEY_DATE = 'bing_hybrid_searched_date_v6';
     const STORAGE_KEY_AUTO = 'bing_hybrid_auto_running_v6';
     const STORAGE_KEY_MIN_DELAY = 'bing_hybrid_min_delay_v6';
     const STORAGE_KEY_MAX_DELAY = 'bing_hybrid_max_delay_v6';
@@ -43,15 +44,63 @@
     let isNavigating = false;
 
     // ==========================================
-    // HELPERS & STORAGE
+    // HELPERS & NORMALIZE
     // ==========================================
-    function getStoredIndex() {
-        const val = parseInt(localStorage.getItem(STORAGE_KEY_INDEX) || '0', 10);
-        return isNaN(val) || val < 0 ? 0 : val;
+    function normalizeText(txt) {
+        return String(txt || '').trim().replace(/\s+/g, ' ').toLowerCase();
     }
 
-    function setStoredIndex(idx) {
-        localStorage.setItem(STORAGE_KEY_INDEX, String(idx));
+    function getTodayDateStr() {
+        return new Date().toISOString().slice(0, 10); // Format: YYYY-MM-DD
+    }
+
+    // ==========================================
+    // SEARCHED WORDS TRACKER (NO REPEATS)
+    // ==========================================
+    function getSearchedWords() {
+        const savedDate = localStorage.getItem(STORAGE_KEY_DATE);
+        const today = getTodayDateStr();
+
+        // If date has changed (new day), automatically reset search history
+        if (savedDate !== today) {
+            localStorage.setItem(STORAGE_KEY_DATE, today);
+            localStorage.setItem(STORAGE_KEY_SEARCHED, JSON.stringify([]));
+            return new Set();
+        }
+
+        try {
+            const arr = JSON.parse(localStorage.getItem(STORAGE_KEY_SEARCHED) || '[]');
+            return new Set(Array.isArray(arr) ? arr.map(w => normalizeText(w)) : []);
+        } catch {
+            return new Set();
+        }
+    }
+
+    function markWordAsSearched(word) {
+        if (!word) return;
+        const norm = normalizeText(word);
+        const set = getSearchedWords();
+        if (!set.has(norm)) {
+            set.add(norm);
+            localStorage.setItem(STORAGE_KEY_DATE, getTodayDateStr());
+            localStorage.setItem(STORAGE_KEY_SEARCHED, JSON.stringify(Array.from(set)));
+        }
+    }
+
+    function clearSearchHistory() {
+        localStorage.setItem(STORAGE_KEY_DATE, getTodayDateStr());
+        localStorage.setItem(STORAGE_KEY_SEARCHED, JSON.stringify([]));
+    }
+
+    function getNextUnsearchedItem() {
+        const searched = getSearchedWords();
+        for (let i = 0; i < wordsList.length; i++) {
+            const word = wordsList[i];
+            if (!searched.has(normalizeText(word))) {
+                return { word, index: i };
+            }
+        }
+        return null; // All words completed
     }
 
     function isAutoRunning() {
@@ -72,6 +121,11 @@
         const { min, max } = getDelayRange();
         const seconds = Math.floor(Math.random() * (max - min + 1)) + min;
         return seconds * 1000;
+    }
+
+    function getURLQuery() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('q') || '';
     }
 
     // ==========================================
@@ -119,9 +173,10 @@
     }
 
     function executeSearch(query) {
-        if (isNavigating) return;
+        if (isNavigating || !query) return;
         isNavigating = true;
 
+        markWordAsSearched(query);
         fillSearchBox(query);
 
         // Try submitting form first; fallback to direct navigation
@@ -145,22 +200,21 @@
     function advanceToNextWord(doExecute) {
         if (!wordsList.length) return;
 
-        let currentIndex = getStoredIndex();
-        let nextIndex = currentIndex + 1;
+        const nextItem = getNextUnsearchedItem();
 
-        if (nextIndex >= wordsList.length) {
-            nextIndex = 0; // loop back to start
+        if (!nextItem) {
+            stopAutoRun();
+            updateUIStatus();
+            alert('🎉 Sabhi 40 trending words search ho chuke hain! Aaj ka quota pura ho gaya.');
+            return;
         }
 
-        setStoredIndex(nextIndex);
-        const nextWord = wordsList[nextIndex];
-
-        updateUIStatus(nextIndex, nextWord);
+        updateUIStatus();
 
         if (doExecute) {
-            executeSearch(nextWord);
+            executeSearch(nextItem.word);
         } else {
-            fillSearchBox(nextWord);
+            fillSearchBox(nextItem.word);
         }
     }
 
@@ -168,6 +222,14 @@
     // AUTO-RUN CONTROLLER
     // ==========================================
     function startAutoRun() {
+        const nextItem = getNextUnsearchedItem();
+        if (!nextItem) {
+            stopAutoRun();
+            updateUIStatus();
+            alert('🎉 Sabhi words pehle hi search ho chuke hain! Dubara chalane ke liye Reset dabayein.');
+            return;
+        }
+
         setAutoRunning(true);
         updateUIButtons();
 
@@ -224,7 +286,7 @@
                     border: 1px solid rgba(255, 255, 255, 0.12);
                     border-radius: 14px;
                     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-                    width: 290px;
+                    width: 300px;
                     padding: 14px;
                     box-sizing: border-box;
                     transition: all 0.25s ease;
@@ -353,21 +415,21 @@
             </style>
 
             <div class="hud-header" id="bing-hud-header">
-                <span class="hud-title">⚡ Bing Assistant</span>
+                <span class="hud-title">⚡ Bing Assistant (No-Repeat)</span>
                 <button class="hud-toggle-btn" id="bing-hud-collapse" title="Collapse / Expand">_</button>
             </div>
 
             <div class="hud-body">
                 <div class="hud-word-box">
                     <div class="hud-word-label">
-                        <span>Current Target</span>
-                        <span id="bing-hud-index">0 / 0</span>
+                        <span>Next Unsearched Word</span>
+                        <span id="bing-hud-index">0 / 40</span>
                     </div>
                     <div class="hud-word-text" id="bing-hud-word">Loading words...</div>
                 </div>
 
                 <div class="hud-actions">
-                    <button class="hud-btn hud-btn-primary" id="bing-hud-btn-next" title="Search next word immediately">
+                    <button class="hud-btn hud-btn-primary" id="bing-hud-btn-next" title="Search next fresh word">
                         ⏭️ Next Word
                     </button>
                     <button class="hud-btn hud-btn-success" id="bing-hud-btn-auto" title="Start automated search loop">
@@ -380,7 +442,7 @@
 
                 <div class="hud-footer">
                     <span id="bing-hud-countdown">💤 Ready</span>
-                    <span style="cursor: pointer; text-decoration: underline;" id="bing-hud-btn-reset">Reset</span>
+                    <span style="cursor: pointer; text-decoration: underline; color: #f87171;" id="bing-hud-btn-reset" title="Clear today's searched words history">Reset History</span>
                 </div>
             </div>
         `;
@@ -399,7 +461,7 @@
             }
         });
 
-        // Next Word Button (Searches immediately)
+        // Next Word Button
         document.getElementById('bing-hud-btn-next').addEventListener('click', () => {
             stopAutoRun();
             advanceToNextWord(true);
@@ -422,19 +484,37 @@
 
         // Reset Counter
         document.getElementById('bing-hud-btn-reset').addEventListener('click', () => {
-            stopAutoRun();
-            setStoredIndex(0);
-            updateUIStatus(0, wordsList[0] || '');
-            fillSearchBox(wordsList[0] || '');
+            if (confirm('Kya aap aaj ki search history reset karna chahte hain?')) {
+                stopAutoRun();
+                clearSearchHistory();
+                updateUIStatus();
+                const next = getNextUnsearchedItem();
+                if (next) fillSearchBox(next.word);
+            }
         });
     }
 
-    function updateUIStatus(idx, word) {
+    function updateUIStatus() {
         const indexEl = document.getElementById('bing-hud-index');
         const wordEl = document.getElementById('bing-hud-word');
+        const searched = getSearchedWords();
+        const nextItem = getNextUnsearchedItem();
 
-        if (indexEl) indexEl.textContent = `${idx + 1} / ${wordsList.length}`;
-        if (wordEl) wordEl.textContent = word || '---';
+        const searchedCount = Array.from(searched).filter(s => wordsList.some(w => normalizeText(w) === s)).length;
+
+        if (indexEl) {
+            indexEl.textContent = `Searched: ${searchedCount} / ${wordsList.length}`;
+        }
+
+        if (wordEl) {
+            if (nextItem) {
+                wordEl.textContent = nextItem.word;
+                wordEl.style.color = '#ffffff';
+            } else {
+                wordEl.textContent = '🎉 All 40 completed!';
+                wordEl.style.color = '#4ade80';
+            }
+        }
     }
 
     function updateUIButtons() {
@@ -457,27 +537,33 @@
         await loadWords();
         if (!wordsList.length) return;
 
-        createFloatingHUD();
-
-        let currentIndex = getStoredIndex();
-        if (currentIndex >= wordsList.length) {
-            currentIndex = 0;
-            setStoredIndex(0);
+        // Check if current page is already a search result (?q=...)
+        const currentQuery = getURLQuery();
+        if (currentQuery) {
+            markWordAsSearched(currentQuery);
         }
 
-        const currentWord = wordsList[currentIndex];
-        updateUIStatus(currentIndex, currentWord);
+        createFloatingHUD();
+        updateUIStatus();
         updateUIButtons();
 
-        // Always ensure search box contains current word on initial page load if empty
+        const nextItem = getNextUnsearchedItem();
+
+        // On home page or if box is empty, pre-fill with next unsearched word
         const box = getSearchBox();
-        if (box && !box.value.trim()) {
-            fillSearchBox(currentWord);
+        if (box && (!box.value.trim() || normalizeText(box.value) === normalizeText(currentQuery))) {
+            if (nextItem && !currentQuery) {
+                fillSearchBox(nextItem.word);
+            }
         }
 
-        // If auto-run is toggled ON, schedule the next search
+        // If auto-run was ON, continue next search
         if (isAutoRunning()) {
-            startAutoRun();
+            if (nextItem) {
+                startAutoRun();
+            } else {
+                stopAutoRun();
+            }
         }
     }
 
