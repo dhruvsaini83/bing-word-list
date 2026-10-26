@@ -85,6 +85,15 @@ fetch("https://raw.githubusercontent.com/dhruvsaini83/bing-word-list/main/words.
 curl -s https://raw.githubusercontent.com/dhruvsaini83/bing-word-list/main/words.json
 ```
 
+### 🧩 Tampermonkey Userscript (Browser Automation)
+
+Install the companion Tampermonkey / Violentmonkey userscript [`bing-search-assistant.user.js`](./bing-search-assistant.user.js) to automate Bing searches directly in your browser:
+- **Floating Dark Glass Widget**: Appears neatly in the bottom-right corner of Bing.
+- **`[⏭️ Next Word]` Button**: Manually inserts and searches the next trending word.
+- **`[▶️ Auto Run]` Mode**: Automatically loops through words with randomized safe delays (5–8s) to emulate human browsing.
+- **`[✏️ Just Fill Box]`**: Pre-fills the search input without submitting.
+- **Install**: In Tampermonkey, create a new script and paste the contents of [`bing-search-assistant.user.js`](https://raw.githubusercontent.com/dhruvsaini83/bing-word-list/main/bing-search-assistant.user.js).
+
 ---
 
 ## 📂 Repository Structure
@@ -93,10 +102,12 @@ curl -s https://raw.githubusercontent.com/dhruvsaini83/bing-word-list/main/words
 bing-word-list/
 ├── .github/
 │   └── workflows/
-│       └── update-words.yml   # GitHub Actions cron scheduler
-├── generate_words.py          # Python automation script (Google Trends + Wikipedia)
-├── words.json                 # Daily updated search keywords (40 items)
-└── README.md                  # Project documentation
+│       └── update-words.yml       # GitHub Actions cron scheduler
+├── bing-search-assistant.user.js  # Tampermonkey automated search assistant
+├── generate_words.py              # Python automation script (Google Trends + Wikipedia)
+├── words.json                     # Daily updated search keywords (40 items)
+├── LICENSE                        # MIT License
+└── README.md                      # Project documentation
 ```
 
 ---
