@@ -2,9 +2,16 @@ import html
 import json
 import random
 import re
+import sys
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
 TARGET_COUNT = 40
 
@@ -26,10 +33,12 @@ FALLBACK_WORDS = [
 ]
 
 def clean_query(text: str) -> str:
-    """Cleans up a query string by unescaping HTML, removing brackets, and trimming spaces."""
+    """Cleans up a query string by unescaping HTML, removing HTML tags, brackets, and trimming spaces."""
     if not text:
         return ""
     text = html.unescape(text)
+    # Strip HTML tags like <b>, <i>, <span> if any
+    text = re.sub(r"<[^>]+>", "", text)
     # Remove contents inside parentheses/brackets e.g. (film), [2026]
     text = re.sub(r"[\(\[\{][^\)\]\}]*[\)\]\}]", "", text)
     # Remove special punctuation but keep letters, digits, and spaces
